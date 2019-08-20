@@ -1,0 +1,229 @@
+---
+title: "Preprocessing - Experiment 4"
+output: html_document
+  chunk_output_type: console
+---
+
+This notebook contains preprocessing steps necessary to get the data from experiment 4 in the paper "Of Primary Importance? Motivation Drives Resource Allocation Across Concurrent Tasks During Multimedia Processing" into the form used in the final analyses.
+
+# Setup
+Loading the packages that we will need.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+Getting the data from the scattered `.csv` files and pulling them together into an easier to use file.  
+
+```{r, message = FALSE, warnings= FALSE}
+
+# Make sure to set this correctly based on where you stored the data
+setwd("~/projects/inprogress/cogperc/cogperc_5/analysis")
+react_files = list.files(path ="data/reactlogs", pattern="*_reactlog.csv", full.names = TRUE)
+log_files = list.files(path = "data/logs", pattern = "*.log.csv", full.names = TRUE)
+reactdata = map_dfr(react_files, read_csv, col_types = "d-ddddcdcddccccdlc")
+
+logdata = map_dfr(log_files, read_csv, col_types = "f-ddddcdcddfdddfdddfddd---------------------------------------------")
+ 
+surveydata = read_csv("data/surveydata.csv")
+
+```
+
+# Preprocessing Log Data
+
+Downsampling the `logdata` file so it's not such a behemoth. Downsampling to ~10Hz since there's no need for the ~60Hz resolution with the analyses that we will be doing.
+
+```{r}
+logdata_downsampled <- logdata %>% filter(total_millis %% 96 < 16)
+
+# Getting rid of everything but the gameplay screen.
+
+logdata_filt <- logdata_downsampled %>% filter(top_screen == "gameplay-adaptive") %>% 
+  rename(sub_id = "subject_number") %>%
+  mutate(sub_id = as.numeric(sub_id))
+
+```
+
+Now I'm going to compute the performance variable. I'm going to create a variable that counts the number of crystals collected and a variable that counts how often the person "dies" (runs their ship into an asteroid). I'll also create a variable that marks every thirty second chunk of gameplay.
+
+```{r}
+
+logdata_filt <- logdata_filt %>% group_by(sub_id, step_number) %>%
+  mutate(target_acq = case_when(targets_collected - lag(targets_collected) != 0 ~ 1, 
+                                TRUE ~ 0),
+         dead = case_when(adaptive_level_score - lag(adaptive_level_score) == -1 ~ 1, 
+                                TRUE ~ 0),
+         thirtysec = step_millis %/% 30000)
+
+```
+
+Now I need to actually calculate the performance variable. I'll divide the number of crystals collected within each 30 second chunk by the number of times that the person died within that given chunk. This gives us a nice (semi-) normally distributed variable that stays more or less flat across time. 
+
+```{r}
+logdata_filt <- logdata_filt %>% 
+  group_by(sub_id, step_number, thirtysec) %>% 
+  summarize(perf = sum(target_acq)/(1+sum(dead))) %>% 
+  filter(perf != 0)
+```
+
+
+# Preprocessing Reaction Prompt Data
+
+The first thing that I need to do with the reaction time data is to create the variables that denote the cognitive load and perceptual load conditions. I'm not going to be using perceptual load in this experiment, but I'll go ahead and get it annotated as well. I also need to take care of when each reaction prompt was high or low reward.
+
+```{r}
+
+reactdata <- reactdata %>% rename(sub_id = subject_number)
+
+reactdata <- mutate(reactdata,
+       condition = case_when(as.numeric(sub_id) %% 2 == 0 ~ 2,
+                             TRUE ~ 1),
+       percload = case_when(condition == 1 & step_number %in% c(11,20) ~ 2,
+                            condition == 1 & step_number %in% c(8,14,17,23) ~ 1,
+                            condition == 2 & step_number %in% c(14,23) ~ 2,
+                            condition == 2 & step_number %in% c(8,11,17,20) ~ 1, 
+                            TRUE ~ 0),
+       cogload = case_when(condition == 1 & step_number %in% c(14,23) ~ 2,
+                           condition == 1 & step_number %in% c(8,11,17,20) ~ 1,
+                           condition == 2 & step_number %in% c(11,20) ~ 2,
+                           condition == 2 & step_number %in% c(8,14,17,23) ~ 1,
+                           TRUE ~ 0))
+
+#Creates each of the two within subjects conditions and the control 
+# control  = 1, percload = 2, cogload = 3
+
+reactdata <- mutate(reactdata,
+                    conditionstep = case_when(percload == 1 & cogload == 1 ~ 1,
+                                              percload == 2 & cogload == 1 ~ 2,
+                                              percload == 1 & cogload == 2 ~ 3, 
+                                              TRUE ~ 0))
+
+# This gets rid of the practice condition.
+reactdata <-filter(reactdata, conditionstep!=0)
+
+#This renames the prompt images to their rewardingness. This depends on the condition step and also the prompt identity, so we'll need to do another case_when chain
+
+reactdata <- mutate(reactdata,
+       reward = case_when(str_detect(reaction_prompt_image, "square.png") == TRUE &
+                            step_number %in% c(11,17,23) ~ "high",
+                          str_detect(reaction_prompt_image, "square.png") == TRUE &
+                            step_number %in% c(8,14,20) ~ "low",
+                          str_detect(reaction_prompt_image, "triangle.png") == TRUE &
+                            step_number %in% c(8,14,20) ~ "high",
+                          str_detect(reaction_prompt_image, "triangle.png") == TRUE &
+                            step_number %in% c(11,17,23) ~ "low",
+                          TRUE ~ NA_character_))
+
+```
+
+## Data filtering
+
+Since Asteroid Impact will miss probes when they start to overlap with one another, I need to upsample some of the data from the participants that missed a lot of the probes. I know that all of the differences should just be more probes that are missed, so I'll just pad the dataframes of each of the subjects with missed RT trials.  
+
+```{r}
+
+my_fun <- function(x,y) sample_n(y, size = x, replace = TRUE)
+
+reactdata_pad <- reactdata %>% 
+  group_by(sub_id, conditionstep) %>% 
+  mutate(reaction_prompt_millis = case_when(reaction_prompt_passed == TRUE ~ reaction_prompt_millis,
+                                            reaction_prompt_passed == FALSE ~ 10000)) %>%
+  nest() %>%
+  mutate(n = map(data, nrow)) %>%
+  unnest(n) %>%
+  mutate(n_short = 120-n,
+         missed = map(data, filter, reaction_prompt_millis >= 10000),
+         fill = map2(n_short, missed, my_fun),
+         n_test = map(fill, nrow),
+         full_df = map2(data, fill, rbind),
+         n_full = map(full_df, nrow)) %>% 
+  unnest(full_df) %>%
+  select(-c(data, missed, fill, n_short, n_test, n_full))
+
+```
+
+Getting rid of outliers
+
+```{r}
+# First, we'll get the mean of responses per subject and the mean performance per subject
+
+outs <- reactdata_pad %>% 
+  group_by(sub_id, conditionstep) %>% 
+  summarize(meanreact = mean(reaction_prompt_millis, na.rm=TRUE), 
+            meanperf = mean(adaptive_level_score, na.rm=TRUE)) %>%
+  ungroup()
+
+# Now we'll get the z-scores of the mean reaction times so that we can filter those > 3
+
+outs_react <- outs %>%
+  mutate(react_z = (meanreact - mean(meanreact, na.rm = TRUE)) / sd(meanreact)) %>%
+  filter(react_z > 3)
+
+# Looks like subjects 1038, 1052, and 1070 missed a disproportionate number of STRTs
+
+outs_perf <- outs %>%
+  mutate(perf_z = (meanperf - mean(meanperf, na.rm = TRUE)) / sd(meanperf)) %>%
+  filter(perf_z > 3)
+
+# Looks like no outliers for performance
+
+```
+
+Looks like subjects 1006, 1013, 1051, 1100, 1112, 1123, 1192, and 1194 are outliers when it comes to STRTs. No performance outliers that are not already accounted for by the STRT outliers.
+
+```{r}
+reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1006, 1013, 1051, 1100, 1112, 1123, 1192, 1194)))
+```
+
+Next, let's filter out the outliers. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within subjects and conditions.
+
+```{r}
+
+reactdata_filt <- reactdata_filt %>% 
+  group_by(sub_id, conditionstep) %>% 
+  mutate(meanreact = mean(reaction_prompt_millis), 
+         sdreact = sd(reaction_prompt_millis), 
+         react_cutoff = (mean(reaction_prompt_millis) + 3 * sd(reaction_prompt_millis))) %>%
+  filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>%
+  ungroup()
+
+```
+
+# Preprocessing Survey Data
+
+```{r}
+vars <- c(sub_id = "Q1", age = "Q7", sex = "Q9", ethnicity = "Q11", vision = "Q56", handedness = "Q57", vg_skill = "Q70_1")
+
+surveydata <- surveydata %>% rename(!!vars)
+
+surveydata_filt <- surveydata %>% select(sub_id, age, sex, ethnicity, vision, handedness, vg_skill)
+```
+
+# Merging into one DF
+
+```{r}
+reactdata_filt <- reactdata_filt %>% 
+  mutate(thirtysec = step_millis %/% 30000)
+
+reactdata_plus_logs <- left_join(reactdata_filt, logdata_filt, by = c("sub_id", "step_number", "thirtysec"))
+
+fulldata <- left_join(reactdata_plus_logs, surveydata_filt, by = "sub_id")
+```
+
+# Some final filtering
+
+Let's get rid of the subjects for which we don't have surveys, and also check to make sure we have the same number of observations per subject after merging.
+
+```{r}
+fulldata <- fulldata %>% filter(!is.na(sex)) %>% filter(sex != "")
+
+View(fulldata %>% group_by(sub_id) %>% summarize(n = n()))
+
+```
+
+Looks good to go.
+
+```{r}
+write_csv(fulldata, path = "fulldata_exp4.csv")
+```
+
