@@ -2,3 +2,5 @@ exp1/data/rawdata*
 exp2/data/rawdata*
 exp3/data/rawdata*
 exp4/data/rawdata*
+docs/_static
+docs/_templates
