@@ -1,0 +1,40 @@
+---
+title: "Final Analyses - Experiment 1"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+TODO: Need to include link to the protocol once everything is posted online. 
+
+In this notebook, I will provide final analyses for experiment 1 in the paper "Of Primary Importance? Motivation Drives Resource Allocation Across Concurrent Tasks During Multimedia Processing." 
+
+In this experiment, participants played three ten-minute rounds of *Asteroid Impact*. One of these rounds contained a cognitive load manipulation (a 1-back memory maintenance task) and one of these rounds contained a perceptual load manipulation (a haze overlay). Perceptual load findings are reported elsewhere, and as such will not be analyzed here (Fisher, Hopp, Lonergan, & Weber, 2018). The third round contained neither the perceptual load nor the cognitive load manipulation, but was otherwise equivalent in gameplay mechanics. All rounds were presented in randomized order.
+
+During the course of gameplay, participants also responded to a secondary task. In this task, participants pressed "x" upon seeing a purple square appear on screen and pressed "z" upon seeing a blue triangle appear on screen. The square was associated with a much higher point reward than was the triangle, although both appeared with equal frequency. 
+
+More information regarding the protocol for this experiment can be found [here]
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
