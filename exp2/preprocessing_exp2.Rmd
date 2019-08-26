@@ -19,7 +19,7 @@ Getting the data from the scattered `.csv` files and pulling them together into 
 ```{r, message = FALSE, warnings= FALSE}
 
 setwd("~/projects/inprogress/cogperc/cogperc_3/analysis")
-react_files = list.files(path ="data/", pattern="*_reactlog.csv", full.names = TRUE)
+react_files = list.files(path ="data/reactlogs", pattern="*_reactlog.csv", full.names = TRUE)
 
 reactdata = map_dfr(react_files, read_csv)
 surveydata = read.csv("data/surveydata_clean.csv")
@@ -122,22 +122,23 @@ outs %>% filter(meanreact > 9000)
 
 ```
 
-We can filter out quite a few people as outliers in the reaction time task.
+We can filter out quite a few people as outliers in the reaction time task. 
 
 ```{r}
-reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1038, 1052, 1070, 1102, 1063, 1040)))
+reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1025, 1038, 1041, 1052, 1070, 1102, 1063, 1040)))
 ```
 
-Next, let's filter out the outliers on the individual probe level. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within subjects and conditions.
+Next, let's filter out the outliers on the individual probe level. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within conditions.
 
 ```{r}
 
 reactdata_filt <- reactdata_filt %>% 
-  group_by(sub_id, conditionstep) %>% 
+  group_by(conditionstep) %>% 
   mutate(meanreact = mean(reaction_prompt_millis), 
          sdreact = sd(reaction_prompt_millis), 
          react_cutoff = (mean(reaction_prompt_millis) + 3 * sd(reaction_prompt_millis))) %>%
-  filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>%
+  filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>% 
+  filter(reaction_prompt_millis > 100) %>%
   ungroup()
 
 ```
@@ -203,3 +204,8 @@ View(fulldata %>% group_by(sub_id) %>% summarize(n = n()))
 ```
 
 Looks good to go.
+
+```{r}
+write_csv(fulldata, path = "fulldata_exp2.csv")
+```
+

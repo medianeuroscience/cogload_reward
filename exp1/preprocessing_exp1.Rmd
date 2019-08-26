@@ -25,7 +25,7 @@ log_files = list.files(path ="data/full_logs/", pattern="*_log.csv", full.names 
 reactdata = map_dfr(react_files, read_csv)
 
 logdata = map_dfr(log_files, read_csv, col_types = "f-ddddcdcddfdddfdddfddd---------------------------------------------")
-
+# 
 surveydata = read.csv("data/surveydata_clean.csv")
 
 ```
@@ -182,7 +182,7 @@ Looks like subject #1119 never responded to the secondary task probes, subject 1
 reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1001, 1119, 1131, 1102, 1103, 1095, 1085, 1105, 1063, 1069, 1108, 1030)))
 ```
 
-Next, let's filter out the outliers. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within subjects and conditions.
+Next, let's filter out the outliers. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within subjects and conditions. We'll also get rid of anything less than 100msec.
 
 ```{r}
 
@@ -191,7 +191,9 @@ reactdata_filt <- reactdata_filt %>%
   mutate(meanreact = mean(reaction_prompt_millis), 
          sdreact = sd(reaction_prompt_millis), 
          react_cutoff = (mean(reaction_prompt_millis) + 3 * sd(reaction_prompt_millis))) %>%
-  filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>%
+  filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>% 
+  filter(reaction_prompt_millis > 100)
+  select(-react_cutoff) %>%
   ungroup()
 
 ```
@@ -215,6 +217,8 @@ reactdata_filt <- reactdata_filt %>%
 reactdata_plus_logs <- left_join(reactdata_filt, logdata_filt, by = c("sub_id", "step_number", "thirtysec"))
 
 fulldata <- left_join(reactdata_plus_logs, surveydata_filt, by = "sub_id")
+
+fulldata <- fulldata %>% mutate(sub_id = recode(sub_id, "2001"= 1181))
 ```
 
 # Some final filtering
@@ -223,7 +227,6 @@ Let's get rid of the subjects for which we don't have surveys, and also check to
 
 ```{r}
 fulldata <- fulldata %>% filter(!is.na(sex)) %>% filter(sex != "")
-
 View(fulldata %>% group_by(sub_id) %>% summarize(n = n()))
 
 ```

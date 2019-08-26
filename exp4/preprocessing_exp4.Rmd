@@ -23,7 +23,7 @@ react_files = list.files(path ="data/reactlogs", pattern="*_reactlog.csv", full.
 log_files = list.files(path = "data/logs", pattern = "*.log.csv", full.names = TRUE)
 reactdata = map_dfr(react_files, read_csv, col_types = "d-ddddcdcddccccdlc")
 
-logdata = map_dfr(log_files, read_csv, col_types = "f-ddddcdcddfdddfdddfddd---------------------------------------------")
+#logdata = map_dfr(log_files, read_csv, col_types = "f-ddddcdcddfdddfdddfddd---------------------------------------------")
  
 surveydata = read_csv("data/surveydata.csv")
 
@@ -169,10 +169,10 @@ outs_perf <- outs %>%
 
 ```
 
-Looks like subjects 1006, 1013, 1051, 1100, 1112, 1123, 1192, and 1194 are outliers when it comes to STRTs. No performance outliers that are not already accounted for by the STRT outliers.
+Looks like subjects 1006, 1013, 1051, 1100, 1112, 1123, 1082, 1192, and 1194 are outliers when it comes to STRTs. Subject 1027 did not collect crystals. No performance outliers that are not already accounted for by the STRT outliers.
 
 ```{r}
-reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1006, 1013, 1051, 1100, 1112, 1123, 1192, 1194)))
+reactdata_filt <- filter(reactdata_pad, !(sub_id %in% c(1006, 1013, 1027, 1051, 1100, 1112, 1123, 1082, 1192, 1194)))
 ```
 
 Next, let's filter out the outliers. Ratcliff (1993) recommends using either the harmonic mean, inverse, or a standard deviation cutoff (+ or - 3 standard deviations from the mean). As our reaction times are naturally capped at 10sec by the software, we shouldn't need to do too much trimming. As the high tail of the distribution is important for the model, we don't want to use a method that will artificially compress the distribution to make it more normal looking. Because of these considerations I'm going to elect for a method that does not modify the actual distributions. We'll just trim all values that are outside of the +- 3sd range within subjects and conditions.
@@ -185,7 +185,8 @@ reactdata_filt <- reactdata_filt %>%
          sdreact = sd(reaction_prompt_millis), 
          react_cutoff = (mean(reaction_prompt_millis) + 3 * sd(reaction_prompt_millis))) %>%
   filter(!(abs(reaction_prompt_millis - median(reaction_prompt_millis)) > 3*sd(reaction_prompt_millis))) %>%
-  ungroup()
+  ungroup() %>%
+  filter(reaction_prompt_millis > 100)
 
 ```
 

@@ -1,0 +1,436 @@
+---
+title: "Final Analyses - Experiment 4"
+author: "Jacob T. Fisher"
+date: "8/26/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+In this notebook, I will provide final analyses for experiment 4 in the paper "Of Primary Importance? Motivation Drives Resource Allocation Across Concurrent Tasks During Multimedia Processing." 
+
+This experiment serves to replicate the findings of experiment 1 and to show that: a) the STRT effects observed are not due to the specific perceptual features of the high or low reward probe; b) people can switch their representations of the rewardingness of stimuli and modify their behavior accordingly throughout a naturalistic task. 
+
+Participants played 18 minutes of *Asteroid Impact*. There was a 1-minute practice round followed by two sets of three minutes of gameplay in each condition (control, perceptual load, cognitive load x high reward square, high reward triangle). All conditions except the practice condition were presented in randomized order. During gameplay, participants also responded to a secondary task, in which they were asked to press `z` when they see a blue triangle and press `x` when they see a purple square appear on the screen. One triangle and one square were presented at random locations on the screen and at random time points within each 12-second block of game play. Probes remained on screen for 6 seconds before disappearing. The onset of a probe was accompanied by a 440Hz auditory tone. Importantly, the auditory tone alerted participants that a prompt was present, but did not provide the information necessary to distinguish *between* probes. Participants needed to rely on the visual modality to distinguish between probes and thus ascertain the correct response. One of the probes was a "high reward" probe, and was worth 1000 in-game points. The other probe was a "low reward" probe, and was worth 10 in-game points. The value of each probe was reported to participants in an instruction screen presented at the beginning of each round of gameplay.
+
+More information regarding the protocol for this experiment can be found [here][https://osf.io/49673/?view_only=efc95fca03374c8dbdf75807be5ecb41]
+
+## Hypotheses
+
+- **H1**: Cognitive load should result in reduced STRT's and reduced performance on a primary task.
+- **H2**: High-reward STRT probes should be responded to faster than low reward STRT probes. 
+- **H3**: Reward should interact with cognitive load such that at high load the gap in response time between high-reward and low-reward distractors should increase.
+
+## Setup 
+
+First I need to import some packages and get the data ingested. These data have already been pre-processed. For more details on the pre-processing steps that were applied to each experiment, see the OSF link above.
+
+```{r setup}
+
+setwd("/home/jtf/projects/inprogress/cogperc/paper/")
+
+library(tidyverse)
+library(ggthemes)
+library(jtools)
+library(lme4)
+
+data <- read_csv("exp4/data/fulldata_exp4.csv")
+
+```
+
+I should do a few descriptives and plots to make sure that everything is looking good to go. 
+
+```{r}
+
+#Number of subjects
+length(unique(data$sub_id))
+
+
+# Number of reaction prompts per subject and condition
+
+plt_data = data %>% group_by(sub_id, conditionstep) %>% summarize(n = first(n))
+ggplot(plt_data, aes(x = sub_id, y = n)) + geom_bar(stat="identity") + facet_wrap(~ conditionstep)
+
+# Mean and SD of reaction prompts
+mean(data$reaction_prompt_millis)
+sd(data$reaction_prompt_millis)
+
+# Distribution of reaction prompts
+
+ggplot(data) + geom_histogram(aes(x = reaction_prompt_millis))
+
+```
+
+Looks like we have a *LOT* more missed probes. I suppose this is to be expected since we have capped the probes at a lot lower level than we did in the other experiments. Since we've already removed outliers, we won't do anything more here for now.
+
+Now let's log transform the RTs for the analyses so that they will be more normally distributed. 
+
+```{r}
+
+data <- data %>% mutate(rt_log = log10(reaction_prompt_millis), 
+                        rt_lognorm = scale(rt_log),
+                        perf_norm = scale(perf))
+
+ggplot(data) + geom_histogram(aes(x = rt_lognorm))
+ggplot(data) + geom_histogram(aes(x = perf_norm))
+
+```
+
+The first thing that I need to do is get rid of the perceptual load condition since its not of interest to these analyses. I'll also recode cognitive load and reward into effect coding. Since we had people completely giving up on the STRT in some conditions, we need to get rid of them as well.
+
+```{r}
+data_filt <- data %>% filter(conditionstep != 2) %>%
+  mutate(cogload = recode(cogload, "1" = -1, "2" = 1),
+         reward = recode(reward, "low" = -1, "high" = 1))
+
+
+data_filt <- data_filt %>% group_by(sub_id, cogload, reward) %>% mutate(meanrt= mean(reaction_prompt_millis, na.rm=TRUE)) %>% filter(meanrt < 1900) %>% ungroup()
+```
+
+## Main Effects
+
+Since everything here is repeated measures, we'll do mixed-effects analyses using the `lmer` function from the `lme4` package. To extract the confidence intervals and p-values we will user `lmerTest`. The first thing that we need to do is a simple t-test of reaction times between the high and low cognitive load conditions and between the high and low reward conditions. 
+
+### Main effects of cognitive load
+
+```{r}
+require(lmerTest)
+
+# Effect of cognitive load on STRT
+lmm1 <- lmer(rt_lognorm ~ cogload + (1|sub_id) + (1|cogload:sub_id), data=data_filt)
+summary(lmm1)
+anova(lmm1)
+
+# Effect of cognitive load on primary task performance
+lmm2 <- lmer(perf_norm ~ cogload + (1|sub_id) + (1|cogload:sub_id), data=data_filt)
+summary(lmm2)
+anova(lmm2)
+
+detach(package:lmerTest)
+
+```
+
+Getting the effect sizes. Although this is not trivial for mixed models, Rouder et al (2012) recommend dividing the mean difference by the standard deviation of the residuals. I can access the sd of the residuals using the `sigma` function from the 
+
+```{r}
+
+df <- data_filt %>% group_by(cogload) %>% summarize(meanrt = mean(rt_lognorm), meanperf = mean(perf_norm, na.rm=TRUE))
+
+d1 <- df[['meanrt']][2] - df[['meanrt']][1] / sigma(lmm1)
+d2 <- df[['meanperf']][2] - df[['meanperf']][1] / sigma(lmm2)
+
+```
+
+Effect size on STRTs is `r d1`
+Effect size on performance is `r d2`
+
+Now let's get the means so I can write them in the paper
+
+```{r}
+df <- data_filt %>% group_by(cogload) %>% summarize(meanrt = mean(reaction_prompt_millis), meanperf = mean(perf, na.rm=TRUE))
+
+# Low cog STRT
+df[['meanrt']][1]
+
+# High cog STRT
+df[['meanrt']][2]
+
+# Low cog performance
+df[['meanperf']][1]
+
+# High cog performance
+df[['meanperf']][2]
+
+```
+
+Now let's do some plots. First, a boxplot with overlays.
+
+```{r}
+
+plt_data <- data %>% 
+  group_by(sub_id, cogload) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis),
+            meanperf = psych::harmonic.mean(perf)) %>% 
+  mutate(cogload = recode(cogload, "1" = "Low", "2" = "High"),
+         cogload = factor(cogload, levels = c("Low", "High")))
+
+# STRT 
+
+ggplot(plt_data, aes(y = meanrt, 
+                     x = as.factor(cogload), 
+                     color = as.factor(cogload))) + 
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(cogload))) + 
+  theme_few() + 
+  scale_color_few() + 
+  #ylim(600,2200) +   
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean STRT", x = "", title = "Cognitive Load")
+
+# Performance
+
+ggplot(plt_data, aes(y = meanperf, 
+                     x = as.factor(cogload), 
+                     color = as.factor(cogload))) + 
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(cogload))) + 
+  theme_few() + 
+  scale_color_few() + 
+  #ylim(600,2200) +   
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean Performance", x = "", title = "Cognitive Load")
+```
+
+Now a raincloud plot
+
+```{r}
+
+ggplot(plt_data, aes(x = meanrt, y = cogload, color = cogload, fill = cogload)) + 
+  ggridges::geom_density_ridges(jittered_points = TRUE, 
+                                position = ggridges::position_raincloud(height = 0.2), 
+                                alpha = 0.7) +
+  theme_few() + 
+  scale_color_few() +
+  scale_fill_few() + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Cognitive Load", x = "Mean STRT", title = "")
+
+ggplot(plt_data, aes(x = meanperf, y = cogload, color = cogload, fill = cogload)) + 
+  ggridges::geom_density_ridges(jittered_points = TRUE, 
+                                position = ggridges::position_raincloud(height = 0.2), 
+                                alpha = 0.7) +
+  theme_few() + 
+  scale_color_few() +
+  scale_fill_few() + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Cognitive Load", x = "Mean Performance", title = "")
+
+```
+
+### Main effects of reward
+
+I expect there to be a main effect of reward on STRT such that high reward probes should be responded to faster. As in experiment 1, I do not expect there to be a main effect of reward on primary task performance, since the high and low value STRT probes are mixed in together.
+
+```{r}
+
+# STRT
+
+require(lmerTest)
+lmm1 <- lmer(rt_lognorm ~ reward + (1|sub_id) + (1|reward:sub_id), data=data_filt)
+summary(lmm1)
+anova(lmm1)
+
+
+# Performance
+lmm2 <- lmer(perf_norm ~ reward + (1|sub_id) + (1|reward:sub_id), data=data_filt)
+summary(lmm2)
+anova(lmm2)
+
+detach(package:lmerTest)
+```
+
+Looks to be the case. Significant influence of reward on both primary and secondary task performance.
+
+```{r}
+
+df <- data_filt %>% group_by(reward) %>% summarize(meanrt = mean(rt_lognorm), meanperf = mean(perf_norm, na.rm=TRUE))
+
+d1 <- df[['meanrt']][2] - df[['meanrt']][1] / sigma(lmm1)
+d2 <- df[['meanperf']][2] - df[['meanperf']][1] / sigma(lmm2)
+
+```
+
+Effect size for STRT is is `r d1`
+Effect size for performance is is `r d2`
+
+Now let's get the means so I can write them in the paper
+
+```{r}
+df <- data_filt %>% group_by(reward) %>% summarize(meanrt = mean(reaction_prompt_millis), meanperf = mean(perf, na.rm=TRUE))
+
+# Low reward STRT
+df[['meanrt']][1]
+
+# High reward STRT
+df[['meanrt']][2]
+```
+Now let's do some plots. First, a boxplot with overlays.
+
+```{r}
+
+plt_data <- data_filt %>% 
+  group_by(sub_id, reward) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis),
+            meanperf = psych::harmonic.mean(perf, na.rm = TRUE)) %>% 
+  mutate(reward = recode(reward, "-1" = "Low Reward", "1" = "High Reward"),
+         reward = factor(reward, levels = c("Low Reward", "High Reward")))
+
+ggplot(plt_data, aes(y = meanrt, 
+                     x = as.factor(reward), 
+                     color = as.factor(reward))) + 
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  theme_few() + 
+  scale_color_few() + 
+  #ylim(600,2200) +   
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean STRT", x = "", title = "Reward")
+
+ggplot(plt_data, aes(y = meanperf, 
+                     x = as.factor(reward), 
+                     color = as.factor(reward))) + 
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  theme_few() + 
+  scale_color_few() + 
+  #ylim(600,2200) +   
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean Performance", x = "", title = "Reward")
+```
+
+Now a raincloud plot
+
+```{r}
+
+ggplot(plt_data, aes(x = meanrt, y = reward, color = reward, fill = reward)) + 
+  ggridges::geom_density_ridges(jittered_points = TRUE, 
+                                position = ggridges::position_raincloud(height = 0.2), 
+                                alpha = 0.7) +
+  theme_few() + 
+  scale_color_few() +
+  scale_fill_few() + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Cognitive Load", x = "Mean STRT", title = "")
+
+ggplot(plt_data, aes(x = meanperf, y = reward, color = reward, fill = reward)) + 
+  ggridges::geom_density_ridges(jittered_points = TRUE, 
+                                position = ggridges::position_raincloud(height = 0.2), 
+                                alpha = 0.7) +
+  theme_few() + 
+  scale_color_few() +
+  scale_fill_few() + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Reward", x = "Mean Performance", title = "")
+
+```
+
+## Interactions
+
+I expect there to be an interaction between cognitive load and reward such that the difference between high and low reward STRT probes should be magnified under high load.
+
+```{r}
+
+# STRT
+
+require(lmerTest)
+lmm1 <- lmer(rt_lognorm ~ reward*cogload + (reward*cogload|sub_id), data=data_filt)
+summary(lmm1)
+anova(lmm1)
+
+lmm2 <- lmer(perf ~ reward*cogload + (reward*cogload|sub_id), data=data_filt)
+summary(lmm2)
+anova(lmm2)
+detach(package:lmerTest)
+
+```
+
+This works out really well. Now let's do a couple of plots for the paper. 
+
+```{r}
+plt_data1 <- data_filt %>% 
+  mutate(reward = recode(reward, "-1" = "Low Reward", "1" = "High Reward"),
+         reward = factor(reward, levels = c("Low Reward", "High Reward")),
+         cogload = recode(cogload, "-1" = "Low Cognitive Load", "1" = "High Cognitive Load"),
+         cogload = factor(cogload, levels = c("Low Cognitive Load", "High Cognitive Load"))) %>%
+  group_by(sub_id, cogload, reward) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis),
+            meanperf = psych::harmonic.mean(perf, na.rm=TRUE), n = n()) %>%
+  filter(!is.nan(meanperf))
+
+plt_data2 <- plt_data1 %>% Rmisc::summarySEwithin(., measurevar = "meanrt", withinvars = c("cogload", "reward"), idvar = "sub_id")
+
+plt_data3 <- plt_data1 %>% Rmisc::summarySEwithin(., measurevar = "meanperf", withinvars = c("cogload", "reward"), idvar = "sub_id")
+
+ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  scale_color_few() + 
+  theme_few() + 
+  facet_wrap(~ cogload) + 
+  geom_point(data = plt_data2, 
+             aes(x = reward, y = meanrt), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data2,
+                aes(x = reward, ymin = meanrt - ci, ymax = meanrt + ci),
+                color = "#000000",
+                width = 0.1) + 
+  geom_line(data = plt_data2, 
+            aes(group = cogload), 
+            color = "#000000") + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean STRT", x = "", title = "")
+
+ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
+  geom_boxplot(width = .5, outlier.shape = NA) + 
+  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  theme_few() + 
+  scale_color_few() + 
+  facet_wrap(~ cogload) + 
+  geom_point(data = plt_data3, 
+             aes(x = reward, y = meanperf), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data3,
+                aes(x = reward, ymin = meanperf - ci, ymax = meanperf + ci),
+                color = "#000000",
+                width = 0.1) + 
+  geom_line(data = plt_data3, 
+            aes(group = cogload), 
+            color = "#000000") + 
+  theme(legend.position = "none",
+        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
+  labs(y = "Mean Performance", x = "", title = "")
+
+
+```
+
+Just because I'm curious, let's do an exploratory analysis where we look at how people learn the response mappings between the high and low reward STRT probes over time. I would expect that as people play the game they woud get more efficient at learning how to switch their behavior in light of the changing value of the probes. This would be reflected in an interaction between reward and time spent playing the game. I'm just going to split the game into chunks and look at whether the gap between high and low reward STRT probes increases over time.
+
+```{r}
+
+ns <- 100
+nr <- nrow(data_filt)
+
+data_filt <- ungroup(data_filt)
+test <- arrange(data_filt, by = total_millis) %>% 
+  mutate(grp = rep(1:ceiling(nr/ns), each=n, length.out=nr)) %>%
+  group_by(grp, reward) %>%
+  summarize(meanrt = mean(reaction_prompt_millis))
+
+ggplot(test, aes(x = grp, y = meanrt, color = as.factor(reward))) + 
+  geom_point(alpha = 0.2) + 
+  geom_smooth(method = "lm")
+
+lmm1 = lmer(meanrt ~ reward*grp data = test)
+summary(lmm1)
+
+```
+
+Looks like it does! Interesting. Need to do some more thinking about how best to frame this for the paper, but it reflects the gradual building and updating of associations between the probes and their values. 
