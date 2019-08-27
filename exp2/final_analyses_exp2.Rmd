@@ -39,13 +39,28 @@ data <- read_csv("exp2/data/fulldata_exp2.csv")
 
 ```
 
-I should do a few descriptives and plots to make sure that everything is looking good to go. 
+Let's get the final demographic data
 
 ```{r}
-
 #Number of subjects
 length(unique(data$sub_id))
 
+#Age
+mean(data$age)
+sd(data$age)
+
+#Sex
+data %>% group_by(sub_id) %>% summarize(sex = first(sex)) %>% count(sex == 1)
+
+# VG Skill
+mean(data$vg_skill, na.rm=TRUE)
+sd(data$vg_skill, na.rm = TRUE)
+```
+
+
+I should do a few descriptives and plots to make sure that everything is looking good to go. 
+
+```{r}
 
 # Number of reaction prompts per subject and condition
 
