@@ -483,3 +483,159 @@ ggplot(plt_data1, aes(x = cogload, y = meanperf, color = as.factor(grp))) +
 
 ```
 
+## Bayesian Analyses
+
+First we need to make sure that all of our variables are factors, and that we don't have any missing values.
+
+```{r}
+data_bf <- data_filt %>% 
+  mutate(cogload = factor(cogload), reward = factor(reward), sub_id = factor(sub_id)) %>%
+  filter(!is.na(perf) & !is.na(reaction_prompt_millis))
+  
+```
+
+### Cognitive Load
+
+Main effect of Cognitive Load on RTs
+
+```{r}
+
+bf <- anovaBF(reaction_prompt_millis ~ cogload + sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "cogload:sub_id"))
+
+# Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
+
+prior.odds <- newPriorOdds(bf, type = "equal")
+
+# Obtaining the posterior odds by multiplying the prior odds by the Bayes Factor
+
+post.odds <- prior.odds * bf
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+The Bayes factor is `r bf`, and the posterior odds increased from 50% to `r post.odds`
+
+Now let's look at performance
+
+```{r}
+
+bf <- anovaBF(perf ~ cogload + sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "cogload:sub_id"))
+
+# Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
+
+prior.odds <- newPriorOdds(bf, type = "equal")
+
+# Obtaining the posterior odds by multiplying the prior odds by the Bayes Factor
+
+post.odds <- prior.odds * bf
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+The Bayes factor is `r bf`, and the posterior odds increased from 50% to `r post.odds`
+
+### Reward
+
+Main effect of Reward on RTs
+
+```{r}
+
+bf <- anovaBF(reaction_prompt_millis ~ reward + sub_id + reward:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id"))
+
+# Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
+
+prior.odds <- newPriorOdds(bf, type = "equal")
+
+# Obtaining the posterior odds by multiplying the prior odds by the Bayes Factor
+
+post.odds <- prior.odds * bf
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+The Bayes factor is `r bf`, and the posterior odds increased from 50% to `r post.odds`
+
+We will calculate the effect of reward on primary task performance since we manipulated it between levels. 
+
+```{r}
+
+bf <- anovaBF(perf ~ reward + sub_id + reward:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id"))
+
+# Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
+
+prior.odds <- newPriorOdds(bf, type = "equal")
+
+# Obtaining the posterior odds by multiplying the prior odds by the Bayes Factor
+
+post.odds <- prior.odds * bf
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+The Bayes factor is `r bf`, and the posterior odds increased from 50% to `r post.odds`
+
+Looks like same story as above. No significant main effect of reward on primary task performance. 
+
+### Interaction between cognitive load and reward on RT
+
+```{r}
+
+bf <- anovaBF(reaction_prompt_millis ~ cogload*reward + sub_id + reward:sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id", "cogload:sub_id"))
+
+# Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
+
+prior.odds <- newPriorOdds(bf, type = "equal")
+
+# Obtaining the posterior odds by multiplying the prior odds by the Bayes Factor
+
+post.odds <- prior.odds * bf
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+Now these are nice, but we aren't really interested in the BF's for the models compared to the model containing random effects only. What we really want to compare is `reaction_prompt_millis ~ cogload + reward + cogload:reward` to `reaction_prompt_millis ~ cogload + reward` (no interaction model). Let's do that now. 
+
+```{r}
+#let's compare the two
+
+bf_interaction = bf[4] / bf[3]
+
+prior.odds <- newPriorOdds(bf_interaction, type = "equal")
+post.odds <- prior.odds * bf_interaction
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+The Bayes Factor for the interaction is `r bf_interaction`
+
+We do get a strong interaction here. 
+
+### Interaction between cognitive load and reward on performance
+
+```{r}
+
+bf <- anovaBF(perf ~ cogload*reward + sub_id + reward:sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id", "cogload:sub_id"))
+
+bf_interaction = bf[4] / bf[3]
+
+prior.odds <- newPriorOdds(bf_interaction, type = "equal")
+post.odds <- prior.odds * bf_interaction
+
+prior.odds <- as.BFprobability(prior.odds)
+post.odds <- as.BFprobability(post.odds)
+
+```
+
+Strong interaction here as well. 
