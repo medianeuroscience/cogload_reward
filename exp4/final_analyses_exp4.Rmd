@@ -40,10 +40,23 @@ data <- read_csv("exp4/data/fulldata_exp4.csv")
 I should do a few descriptives and plots to make sure that everything is looking good to go. 
 
 ```{r}
-
 #Number of subjects
 length(unique(data$sub_id))
 
+#Age
+mean(data$age)
+sd(data$age)
+
+#Sex
+data %>% group_by(sub_id) %>% summarize(sex = first(sex)) %>% count(sex == 1)
+
+# VG Skill
+mean(data$vg_skill, na.rm=TRUE)
+sd(data$vg_skill, na.rm = TRUE)
+```
+
+
+```{r}
 
 # Number of reaction prompts per subject and condition
 
@@ -81,9 +94,6 @@ The first thing that I need to do is get rid of the perceptual load condition si
 data_filt <- data %>% filter(conditionstep != 2) %>%
   mutate(cogload = recode(cogload, "1" = -1, "2" = 1),
          reward = recode(reward, "low" = -1, "high" = 1))
-
-
-data_filt <- data_filt %>% group_by(sub_id, cogload, reward) %>% mutate(meanrt= mean(reaction_prompt_millis, na.rm=TRUE)) %>% filter(meanrt < 1900) %>% ungroup()
 ```
 
 ## Main Effects
@@ -109,6 +119,18 @@ detach(package:lmerTest)
 
 ```
 
+Getting confidence intervals and p-values. 
+
+```{r}
+fixef1 <- broom.mixed::tidy(lmm1, conf.int = TRUE) %>%
+  mutate(dv = "STRT")
+fixef2 <- broom.mixed::tidy(lmm2, conf.int = TRUE) %>% 
+  mutate(dv = "Perf")
+
+fixefs <- bind_rows(fixef1, fixef2) %>%
+  filter(term != "(Intercept)" & effect == "fixed")
+```
+
 Getting the effect sizes. Although this is not trivial for mixed models, Rouder et al (2012) recommend dividing the mean difference by the standard deviation of the residuals. I can access the sd of the residuals using the `sigma` function from the 
 
 ```{r}
@@ -126,21 +148,36 @@ Effect size on performance is `r d2`
 Now let's get the means so I can write them in the paper
 
 ```{r}
-df <- data_filt %>% group_by(cogload) %>% summarize(meanrt = mean(reaction_prompt_millis), meanperf = mean(perf, na.rm=TRUE))
+df <- data_filt %>% 
+  group_by(sub_id, cogload) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis), meanperf = psych::harmonic.mean(perf, na.rm=TRUE)) %>%
+  ungroup() %>% 
+  filter(!is.nan(meanperf)) %>%
+  group_by(cogload) %>%
+  summarize(sdrt = sd(meanrt),
+            sdperf = sd(meanperf),
+            meanrt = mean(meanrt),
+            meanperf = mean(meanperf))
 
 # Low cog STRT
 df[['meanrt']][1]
+df[['sdrt']][1]
 
 # High cog STRT
 df[['meanrt']][2]
+df[['sdrt']][2]
 
 # Low cog performance
 df[['meanperf']][1]
+df[['sdperf']][1]
 
 # High cog performance
 df[['meanperf']][2]
+df[['sdperf']][2]
 
 ```
+
+#### Plots
 
 Now let's do some plots. First, a boxplot with overlays.
 
@@ -261,6 +298,8 @@ df[['meanrt']][1]
 # High reward STRT
 df[['meanrt']][2]
 ```
+
+#### Plots
 Now let's do some plots. First, a boxplot with overlays.
 
 ```{r}
@@ -348,6 +387,8 @@ anova(lmm2)
 detach(package:lmerTest)
 
 ```
+
+#### Plots
 
 This works out really well. Now let's do a couple of plots for the paper. 
 
