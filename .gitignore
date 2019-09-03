@@ -1,5 +1,6 @@
 .vscode/*
 .RHistory
+.Rproj.user/*
 figures/*
 exp1/data/rawdata*
 exp2/data/rawdata*

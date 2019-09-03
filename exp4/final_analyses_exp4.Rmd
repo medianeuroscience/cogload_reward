@@ -32,6 +32,7 @@ library(tidyverse)
 library(ggthemes)
 library(jtools)
 library(lme4)
+library(BayesFactor)
 
 data <- read_csv("exp4/data/fulldata_exp4.csv")
 
@@ -179,7 +180,7 @@ df[['sdperf']][2]
 
 #### Plots
 
-Now let's do some plots. First, a boxplot with overlays.
+Now let's do some plots. First, a couple of pointrange plots.
 
 ```{r}
 
@@ -188,38 +189,64 @@ plt_data <- data %>%
   summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis),
             meanperf = psych::harmonic.mean(perf)) %>% 
   mutate(cogload = recode(cogload, "1" = "Low", "2" = "High"),
-         cogload = factor(cogload, levels = c("Low", "High")))
+         cogload = factor(cogload, levels = c("Low", "High")))   %>%
+  filter(!is.nan(meanperf))
+
+plt_data2 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanrt", withinvars = c("cogload"), idvar = "sub_id")
+
+plt_data3 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanperf", withinvars = c("cogload"), idvar = "sub_id")
 
 # STRT 
+png(file="figures/exp4_cog_rt_main.png",width=700,height=3200, res = 300)
 
 ggplot(plt_data, aes(y = meanrt, 
                      x = as.factor(cogload), 
                      color = as.factor(cogload))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(cogload))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(cogload))) + 
   theme_few() + 
+  geom_point(data = plt_data2, 
+             aes(x = cogload, y = meanrt), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data2,
+                aes(x = cogload, ymin = meanrt - se, ymax = meanrt + se),
+                color = "#000000",
+                width = 0.1) + 
   scale_color_few() + 
-  #ylim(600,2200) +   
+  ylim(300,2500) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean STRT", x = "", title = "Cognitive Load")
 
+dev.off()
+
 # Performance
+
+png(file="figures/exp4_cog_perf_main.png",width=700,height=3200, res = 300)
 
 ggplot(plt_data, aes(y = meanperf, 
                      x = as.factor(cogload), 
                      color = as.factor(cogload))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(cogload))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(cogload))) + 
   theme_few() + 
+  geom_point(data = plt_data3, 
+             aes(x = cogload, y = meanperf), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data3,
+                aes(x = cogload, ymin = meanperf - se, ymax = meanperf + se),
+                color = "#000000",
+                width = 0.1) + 
   scale_color_few() + 
-  #ylim(600,2200) +   
+  ylim(0,40) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean Performance", x = "", title = "Cognitive Load")
+
+dev.off()
+
 ```
+
 
 Now a raincloud plot
 
@@ -233,7 +260,7 @@ ggplot(plt_data, aes(x = meanrt, y = cogload, color = cogload, fill = cogload)) 
   scale_color_few() +
   scale_fill_few() + 
   theme(legend.position = "none",
-        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Cognitive Load", x = "Mean STRT", title = "")
 
@@ -245,7 +272,7 @@ ggplot(plt_data, aes(x = meanperf, y = cogload, color = cogload, fill = cogload)
   scale_color_few() +
   scale_fill_few() + 
   theme(legend.position = "none",
-        axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
+        axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Cognitive Load", x = "Mean Performance", title = "")
 
@@ -273,6 +300,18 @@ anova(lmm2)
 detach(package:lmerTest)
 ```
 
+Getting confidence intervals and p-values. 
+
+```{r}
+fixef1 <- broom.mixed::tidy(lmm1, conf.int = TRUE) %>%
+  mutate(dv = "STRT")
+fixef2 <- broom.mixed::tidy(lmm2, conf.int = TRUE) %>% 
+  mutate(dv = "Perf")
+
+fixefs <- bind_rows(fixef1, fixef2) %>%
+  filter(term != "(Intercept)" & effect == "fixed")
+```
+
 Looks to be the case. Significant influence of reward on both primary and secondary task performance.
 
 ```{r}
@@ -288,19 +327,39 @@ Effect size for STRT is is `r d1`
 Effect size for performance is is `r d2`
 
 Now let's get the means so I can write them in the paper
-
 ```{r}
-df <- data_filt %>% group_by(reward) %>% summarize(meanrt = mean(reaction_prompt_millis), meanperf = mean(perf, na.rm=TRUE))
+df <- data_filt %>% 
+  group_by(sub_id, cogload) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis), meanperf = psych::harmonic.mean(perf, na.rm=TRUE)) %>%
+  ungroup() %>% 
+  filter(!is.nan(meanperf)) %>%
+  group_by(cogload) %>%
+  summarize(sdrt = sd(meanrt),
+            sdperf = sd(meanperf),
+            meanrt = mean(meanrt),
+            meanperf = mean(meanperf))
 
-# Low reward STRT
+# Low cog STRT
 df[['meanrt']][1]
+df[['sdrt']][1]
 
-# High reward STRT
+# High cog STRT
 df[['meanrt']][2]
+df[['sdrt']][2]
+
+# Low cog performance
+df[['meanperf']][1]
+df[['sdperf']][1]
+
+# High cog performance
+df[['meanperf']][2]
+df[['sdperf']][2]
+
 ```
 
 #### Plots
-Now let's do some plots. First, a boxplot with overlays.
+
+Now let's do some plots. First, a couple of pointrange plots.
 
 ```{r}
 
@@ -308,34 +367,59 @@ plt_data <- data_filt %>%
   group_by(sub_id, reward) %>% 
   summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis),
             meanperf = psych::harmonic.mean(perf, na.rm = TRUE)) %>% 
-  mutate(reward = recode(reward, "-1" = "Low Reward", "1" = "High Reward"),
-         reward = factor(reward, levels = c("Low Reward", "High Reward")))
+  mutate(reward = recode(reward, "-1" = "Low", "1" = "High"),
+         reward = factor(reward, levels = c("Low", "High"))) %>%
+  filter(!is.nan(meanperf))
+
+plt_data2 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanrt", withinvars = c("reward"), idvar = "sub_id")
+
+plt_data3 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanperf", withinvars = c("reward"), idvar = "sub_id")
+
+png(file="figures/exp4_rw_rt_main.png",width=700,height=3200, res = 300)
 
 ggplot(plt_data, aes(y = meanrt, 
                      x = as.factor(reward), 
                      color = as.factor(reward))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
+  geom_point(data = plt_data2, 
+             aes(x = reward, y = meanrt), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data2,
+                aes(x = reward, ymin = meanrt - se, ymax = meanrt + se),
+                color = "#000000",
+                width = 0.1) + 
   theme_few() + 
   scale_color_few() + 
-  #ylim(600,2200) +   
+  ylim(300,2500) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean STRT", x = "", title = "Reward")
 
+dev.off()
+
+png(file="figures/exp4_rw_perf_main.png",width=700,height=3200, res = 300)
+
 ggplot(plt_data, aes(y = meanperf, 
                      x = as.factor(reward), 
                      color = as.factor(reward))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
+  geom_point(data = plt_data3, 
+             aes(x = reward, y = meanperf), 
+             color = "#000000") + 
+  geom_errorbar(data = plt_data3,
+                aes(x = reward, ymin = meanperf - se, ymax = meanperf + se),
+                color = "#000000",
+                width = 0.1) +
   scale_color_few() + 
-  #ylim(600,2200) +   
+  ylim(0, 40) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean Performance", x = "", title = "Reward")
+
+dev.off()
 ```
 
 Now a raincloud plot
@@ -345,7 +429,7 @@ Now a raincloud plot
 ggplot(plt_data, aes(x = meanrt, y = reward, color = reward, fill = reward)) + 
   ggridges::geom_density_ridges(jittered_points = TRUE, 
                                 position = ggridges::position_raincloud(height = 0.2), 
-                                alpha = 0.7) +
+                                alpha = 0.5) +
   theme_few() + 
   scale_color_few() +
   scale_fill_few() + 
@@ -357,7 +441,7 @@ ggplot(plt_data, aes(x = meanrt, y = reward, color = reward, fill = reward)) +
 ggplot(plt_data, aes(x = meanperf, y = reward, color = reward, fill = reward)) + 
   ggridges::geom_density_ridges(jittered_points = TRUE, 
                                 position = ggridges::position_raincloud(height = 0.2), 
-                                alpha = 0.7) +
+                                alpha = 0.5) +
   theme_few() + 
   scale_color_few() +
   scale_fill_few() + 
@@ -381,10 +465,42 @@ lmm1 <- lmer(rt_lognorm ~ reward*cogload + (reward*cogload|sub_id), data=data_fi
 summary(lmm1)
 anova(lmm1)
 
+# Performance
+
 lmm2 <- lmer(perf ~ reward*cogload + (reward*cogload|sub_id), data=data_filt)
 summary(lmm2)
 anova(lmm2)
 detach(package:lmerTest)
+
+fixef1 <- broom.mixed::tidy(lmm1, conf.int = TRUE) %>%
+  mutate(dv = "STRT") %>% filter(term != "(Intercept)" & effect == "fixed")
+
+fixef2 <- broom.mixed::tidy(lmm2, conf.int = TRUE) %>%
+  mutate(dv = "perf") %>% filter(term != "(Intercept)" & effect == "fixed")
+
+```
+
+```{r}
+df <- data_filt %>% 
+  group_by(sub_id, cogload, reward) %>% 
+  summarize(meanrt = psych::harmonic.mean(reaction_prompt_millis), meanperf = mean(perf, na.rm=TRUE)) %>%
+  ungroup() %>%
+  filter(!is.nan(meanperf)) %>%
+  group_by(cogload, reward) %>%
+  summarize(meanrt = mean(meanrt),
+            meanperf = mean(meanperf))
+
+# High vs. low reward under low cog load
+df[['meanrt']][1] - df[['meanrt']][2]
+
+# High vs. low reward under high cog load
+df[['meanrt']][3] - df[['meanrt']][4]
+
+# High vs. low reward under low cog load
+df[['meanperf']][1] - df[['meanperf']][2]
+
+# High vs. low reward under high cog load
+df[['meanperf']][3] - df[['meanperf']][4]
 
 ```
 
@@ -394,8 +510,8 @@ This works out really well. Now let's do a couple of plots for the paper.
 
 ```{r}
 plt_data1 <- data_filt %>% 
-  mutate(reward = recode(reward, "-1" = "Low Reward", "1" = "High Reward"),
-         reward = factor(reward, levels = c("Low Reward", "High Reward")),
+  mutate(reward = recode(reward, "-1" = "Low\nReward", "1" = "High\nReward"),
+         reward = factor(reward, levels = c("Low\nReward", "High\nReward")),
          cogload = recode(cogload, "-1" = "Low Cognitive Load", "1" = "High Cognitive Load"),
          cogload = factor(cogload, levels = c("Low Cognitive Load", "High Cognitive Load"))) %>%
   group_by(sub_id, cogload, reward) %>% 
@@ -407,12 +523,14 @@ plt_data2 <- plt_data1 %>% Rmisc::summarySEwithin(., measurevar = "meanrt", with
 
 plt_data3 <- plt_data1 %>% Rmisc::summarySEwithin(., measurevar = "meanperf", withinvars = c("cogload", "reward"), idvar = "sub_id")
 
+png(file="figures/exp4_cog_rw_rt_interact.png",width=1000,height=3200, res = 300)
+
 ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   scale_color_few() + 
   theme_few() + 
   facet_wrap(~ cogload) + 
+  ylim(300, 2500) + 
   geom_point(data = plt_data2, 
              aes(x = reward, y = meanrt), 
              color = "#000000") + 
@@ -428,11 +546,15 @@ ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean STRT", x = "", title = "")
 
+dev.off()
+
+png(file="figures/exp4_cog_rw_perf_interact.png",width=1000,height=3200, res = 300)
+
 ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
-  geom_boxplot(width = .5, outlier.shape = NA) + 
-  geom_jitter(width = 0.1, alpha = 0.7, aes(color = as.factor(reward))) + 
+  geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
   scale_color_few() + 
+  ylim(0, 40) + 
   facet_wrap(~ cogload) + 
   geom_point(data = plt_data3, 
              aes(x = reward, y = meanperf), 
@@ -449,7 +571,7 @@ ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean Performance", x = "", title = "")
 
-
+dev.off()
 ```
 
 
@@ -537,7 +659,7 @@ Won't bother calculating the Bayes Factor for performance since the high and low
 
 ```{r}
 
-bf <- anovaBF(reaction_prompt_millis ~ cogload*reward + sub_id + reward:sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id", "cogload:sub_id"))
+bf <- anovaBF(rt_lognorm ~ cogload*reward + sub_id + reward:sub_id + cogload:sub_id, data=data_bf, whichRandom = c("sub_id", "reward:sub_id", "cogload:sub_id"))
 
 # Initiating some prior odds wherein the likelihood of a model containing cognitive load is equal to the likelihood of a model not containing cognitive load (just reaction_prompt_millis ~ sub_id)
 

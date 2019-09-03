@@ -180,7 +180,7 @@ df[['sdperf']][2]
 ```
 
 #### Plots
-Now let's do some plots. First, a boxplot with overlays.
+Now let's do some plots. First, a couple of pointrange plots.
 
 ```{r}
 
@@ -198,55 +198,57 @@ plt_data3 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanperf", wit
 
 # STRT 
 
-png(file="figures/exp2_cog_rt_main.png",width=700,height=3200, res = 300)
-
-ggplot(plt_data, aes(y = meanrt, 
+plt1 <- ggplot(plt_data, aes(y = meanrt, 
                      x = as.factor(cogload), 
                      color = as.factor(cogload))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(cogload))) + 
   theme_few() + 
   scale_color_few() + 
   geom_point(data = plt_data2, 
              aes(x = cogload, y = meanrt), 
-             color = "#000000") + 
+             color = "#000000",
+             size = 2) + 
   geom_errorbar(data = plt_data2,
                 aes(x = cogload, ymin = meanrt - se, ymax = meanrt + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size = .8) + 
   ylim(300,2500) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean STRT", x = "", title = "Cognitive Load")
 
-dev.off()
+ggsave("exp2_cog_rt_main.png", plot =  plt1, path = "figures/", device = png(), width = 6, height = 24, units = "cm", dpi  = 300)
+
+plot(plt1)
 
 # Performance
 
-png(file="figures/exp2_cog_perf_main.png",width=700,height=3200, res = 300)
-
-ggplot(plt_data, aes(y = meanperf, 
+plt2 <- ggplot(plt_data, aes(y = meanperf, 
                      x = as.factor(cogload), 
                      color = as.factor(cogload))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(cogload))) + 
   theme_few() + 
   scale_color_few() + 
   geom_point(data = plt_data3, 
              aes(x = cogload, y = meanperf), 
-             color = "#000000") + 
+             color = "#000000",
+             size = 2) + 
   geom_errorbar(data = plt_data3,
                 aes(x = cogload, ymin = meanperf - se, ymax = meanperf + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size = .8) + 
   ylim(0,40) +   
   theme(legend.position = "none",
         axis.title.y = element_text(margin = margin(t = 0, r = 10, b = 0, l = 0)),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean Performance", x = "", title = "Cognitive Load")
 
-dev.off()
+ggsave("exp2_cog_perf_main.png", plot =  plt2, path = "figures/", device = png(), width = 6, height = 24, units = "cm", dpi  = 300)
+
+plot(plt2)
 ```
 
 Now a raincloud plot
@@ -349,7 +351,7 @@ df[['sdrt']][2]
 ```
 
 #### Plots
-Now let's do some plots. First, a boxplot with overlays.
+Now let's do some plots. First, a couple of pointrange plots.
 
 ```{r}
 
@@ -366,49 +368,55 @@ plt_data2 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanrt", withi
 
 plt_data3 <- plt_data %>% Rmisc::summarySEwithin(., measurevar = "meanperf", withinvars = c("reward"), idvar = "sub_id")
 
-png(file="figures/exp2_rw_rt_main.png",width=700,height=3200, res = 300)
-ggplot(plt_data, aes(y = meanrt, 
+plt1 <- ggplot(plt_data, aes(y = meanrt, 
                      x = as.factor(reward), 
                      color = as.factor(reward))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
   scale_color_few() + 
   geom_point(data = plt_data2, 
              aes(x = reward, y = meanrt), 
-             color = "#000000") + 
+             color = "#000000",
+             size = 2) + 
   geom_errorbar(data = plt_data2,
                 aes(x = reward, ymin = meanrt - se, ymax = meanrt + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size = 0.8) + 
   ylim(300,2500) +   
   theme(legend.position = "none",
         axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean STRT", x = "", title = "Reward")
-dev.off()
 
-png(file="figures/exp2_rw_perf_main.png",width=700,height=3200, res = 300)
-ggplot(plt_data, aes(y = meanperf, 
+ggsave("exp2_rw_rt_main.png", plot =  plt1, path = "figures/", device = png(), width = 6, height = 24, units = "cm", dpi  = 300)
+
+plot(plt1)
+
+plt2 <- ggplot(plt_data, aes(y = meanperf, 
                      x = as.factor(reward), 
                      color = as.factor(reward))) + 
-  geom_boxplot(width = .5, outlier.shape = NA) + 
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
   scale_color_few() + 
   geom_point(data = plt_data3, 
              aes(x = reward, y = meanperf), 
-             color = "#000000") + 
+             color = "#000000",
+             size = 2) + 
   geom_errorbar(data = plt_data3,
                 aes(x = reward, ymin = meanperf - se, ymax = meanperf + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size =.8) + 
   ylim(0,40) +   
   theme(legend.position = "none",
         axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))) +
   labs(y = "Mean Performance", x = "", title = "Reward")
-dev.off()
+
+ggsave("exp2_rw_perf_main.png", plot =  plt2, path = "figures/", device = png(), width = 6, height = 24, units = "cm", dpi  = 300)
+
+plot(plt2)
 ```
 
 Now a raincloud plot
@@ -504,8 +512,7 @@ plt_data3 <- plt_data1 %>% Rmisc::summarySEwithin(., measurevar = "meanperf", wi
 
 png(file="figures/exp2_cog_rw_rt_interact.png",width=1000,height=3200, res = 300)
 
-ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
-  geom_boxplot(width = .5, outlier.shape = NA) + 
+plt1 <- ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
   scale_color_few() + 
@@ -513,14 +520,17 @@ ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
   facet_wrap(~ cogload) + 
   geom_point(data = plt_data2, 
              aes(x = reward, y = meanrt), 
-             color = "#000000") + 
+             color = "#000000", 
+             size = 2) + 
   geom_errorbar(data = plt_data2,
                 aes(x = reward, ymin = meanrt - se, ymax = meanrt + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size = 0.8) + 
   geom_line(data = plt_data2, 
             aes(group = cogload), 
-            color = "#000000") + 
+            color = "#000000",
+            size = 0.8) + 
   theme(legend.position = "none",
         axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
@@ -528,12 +538,13 @@ ggplot(plt_data1, aes(x = reward, y = meanrt, color = reward)) +
         axis.text.y=element_blank()) +
   labs(y = "Mean STRT", x = "", title = "")
 
-dev.off()
+ggsave("exp2_cog_rw_rt_interact.png", plot =  plt1, path = "figures/", device = png(), width = 10, height = 24, units = "cm", dpi  = 300)
+
+plot(plt1)
 
 png(file="figures/exp2_cog_rw_perf_interact.png",width=1000,height=3200, res = 300)
 
-ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
-  geom_boxplot(width = .5, outlier.shape = NA) + 
+plt2 <- ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
   geom_jitter(width = 0.1, alpha = 0.5, aes(color = as.factor(reward))) + 
   theme_few() + 
   scale_color_few() + 
@@ -541,14 +552,17 @@ ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
   ylim(0,40) + 
   geom_point(data = plt_data3, 
              aes(x = reward, y = meanperf), 
-             color = "#000000") + 
+             color = "#000000",
+             size = 2) + 
   geom_errorbar(data = plt_data3,
                 aes(x = reward, ymin = meanperf - se, ymax = meanperf + se),
                 color = "#000000",
-                width = 0.1) + 
+                width = 0.15,
+                size = .8) + 
   geom_line(data = plt_data3, 
             aes(group = cogload), 
-            color = "#000000") + 
+            color = "#000000",
+            size = .8) + 
   theme(legend.position = "none",
         axis.title.y = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0)),
@@ -556,7 +570,9 @@ ggplot(plt_data1, aes(x = reward, y = meanperf, color = reward)) +
         axis.text.y=element_blank()) +
   labs(y = "Mean Performance", x = "", title = "")
 
-dev.off()
+ggsave("exp2_cog_rw_perf_interact.png", plot =  plt2, path = "figures/", device = png(), width = 10, height = 24, units = "cm", dpi  = 300)
+
+plot(plt2)
 ```
 
 ## Bayesian Analyses
@@ -720,3 +736,4 @@ post.odds <- as.BFprobability(post.odds)
 The Bayes Factor for the interaction is `r bf_interaction`
 
 We do have a decently strong interaction on primary task performance (BF10 ~ 1750).
+
